@@ -3,5 +3,6 @@ package main
 import "converter/cmd/app"
 
 func main() {
-	app.NewApp()
+	a := app.NewApp()
+	a.Start()
 }

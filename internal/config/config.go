@@ -54,8 +54,8 @@ func NewConfig() (*Config, error) {
 		s = `\`
 		pandoc = `C:\Program Files\Pandoc\pandoc.exe`
 		wkhtmltopdf = `C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe`
-		r = `B:\programmin-20260114T065921Z-1-001\programmin\converter\testDir`
-		tmp = `B:\programmin-20260114T065921Z-1-001\programmin\converter\tmp`
+		r = `B:\programmin-20260114T065921Z-1-001\programmin\converter\test`  //dir for converter
+		tmp = `B:\programmin-20260114T065921Z-1-001\programmin\converter\tmp` // tmp dir
 	}
 
 	return &Config{
