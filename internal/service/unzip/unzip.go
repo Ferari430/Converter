@@ -2,7 +2,7 @@ package unzip
 
 import (
 	"archive/zip"
-	"converter/internal/models"
+	"converter/internal/domain/entity"
 	"fmt"
 	"io"
 	"os"
@@ -10,13 +10,7 @@ import (
 	"strings"
 )
 
-type UnzipService struct {
-	db Repository
-}
-
-type Repository interface {
-	Get()
-}
+type UnzipService struct{}
 
 func NewUnzipService() *UnzipService {
 	return &UnzipService{}
@@ -29,32 +23,28 @@ func (u *UnzipService) ExtractFiles(root string) (string, error) {
 	return f, nil
 }
 
-func (u *UnzipService) UnzipArchive(src string) (*models.UnzipResult, error) {
-	// Проверяем существование файла
+func (u *UnzipService) UnzipArchive(src string) (*entity.UnzipResult, error) {
 	if _, err := os.Stat(src); os.IsNotExist(err) {
 		return nil, fmt.Errorf("file does not exist: %s", src)
 	}
 
-	// Создаем уникальную директорию назначения
 	destDir, err := u.createUniqueDestDir(src)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
-	// Открываем ZIP архив
 	r, err := zip.OpenReader(src)
 	if err != nil {
-		return &models.UnzipResult{DestDir: destDir}, fmt.Errorf("failed to open zip file: %w", err)
+		return &entity.UnzipResult{DestDir: destDir}, fmt.Errorf("failed to open zip file: %w", err)
 	}
 	defer r.Close()
 
-	// Распаковываем файлы
 	extractedFiles, err := u.extractAllFiles(r, destDir)
 	if err != nil {
-		return &models.UnzipResult{DestDir: destDir, Files: extractedFiles}, err
+		return &entity.UnzipResult{DestDir: destDir, Files: extractedFiles}, err
 	}
 
-	return &models.UnzipResult{
+	return &entity.UnzipResult{
 		DestDir: destDir,
 		Files:   extractedFiles,
 		Count:   len(extractedFiles),
@@ -62,14 +52,11 @@ func (u *UnzipService) UnzipArchive(src string) (*models.UnzipResult, error) {
 }
 
 func (u *UnzipService) createUniqueDestDir(src string) (string, error) {
-	// Создаем папку рядом с архивом
 	baseDir := filepath.Dir(src)
 	baseName := strings.TrimSuffix(filepath.Base(src), filepath.Ext(src))
 
-	// Создаем уникальное имя
 	destDir := filepath.Join(baseDir, baseName)
 
-	// Если папка уже существует, добавляем номер
 	counter := 1
 	originalDestDir := destDir
 	for {
@@ -79,12 +66,10 @@ func (u *UnzipService) createUniqueDestDir(src string) (string, error) {
 		destDir = fmt.Sprintf("%s_%d", originalDestDir, counter)
 		counter++
 		if counter > 100 {
-			// Если слишком много, создаем в temp
 			return os.MkdirTemp("", baseName+"_*")
 		}
 	}
 
-	// Создаем директорию
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return "", err
 	}

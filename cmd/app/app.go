@@ -1,68 +1,96 @@
 package app
 
 import (
+	"context"
+	kafka_in "converter/internal/adapters/in/kafka"
+	kafka_out "converter/internal/adapters/out/kafka"
 	"converter/internal/config"
-	"converter/internal/handler/convert"
-	"converter/internal/handler/unzip"
+	infra_kafka "converter/internal/infra/kafka"
+	"converter/internal/infra/repository"
 	convertservice "converter/internal/service/convert"
-	unzip2 "converter/internal/service/unzip"
+	"converter/internal/service/unzip"
+	"converter/internal/usecase"
 	"log"
 )
 
 type App struct {
-	ConvertHandler *convert.ConvertHandler
-	UnzipHandler   *unzip.UnzipHandler
-	cfg            *config.Config
-	kafka          Kafka
-}
-
-type Kafka interface {
-	Get() string
+	consumer    infra_kafka.Consumer
+	config      *config.Config
+	handler     *kafka_in.KafkaMessageHandler
+	kafkaClient *infra_kafka.KafkaClient
 }
 
 func NewApp() *App {
 	cfg, err := config.LoadConfig()
-
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to load config:", err)
 	}
 
-	im := convertservice.NewGoImageProcessor()
-	md := convertservice.NewMDFinder(cfg.ConverterCfg.RootDir, ".md", im)
-	c := convert.NewConvertHandler(md, im)
+	kafkaClient, err := infra_kafka.NewClient(cfg.KafkaCfg)
+	if err != nil {
+		log.Fatal("Failed to create Kafka client:", err)
+	}
 
-	///UNZIP
+	unzipService := unzip.NewUnzipService()
+	imageProcessor := convertservice.NewGoImageProcessor()
+	mdFinder := convertservice.NewMDFinder(cfg.ConverterCfg.RootDir, ".md", imageProcessor)
 
-	s := unzip2.NewUnzipService()
-	h := unzip.NewUnzipHandler(s)
+	unzipRepo := repository.NewUnzipRepository(unzipService)
+	convertRepo := repository.NewConvertRepository(mdFinder, imageProcessor, &cfg.ConverterCfg)
+
+	producer, err := kafkaClient.Producer()
+	if err != nil {
+		log.Fatal("Failed to create producer:", err)
+	}
+
+	eventPublisher := kafka_out.NewKafkaEventPublisher(producer, cfg.KafkaCfg.Topic)
+
+	convertUseCase := usecase.NewConvertArchiveUseCase(unzipRepo, convertRepo, eventPublisher)
+
+	messageHandler := kafka_in.NewKafkaMessageHandler(convertUseCase)
+
+	consumer, err := infra_kafka.NewConsumer(kafkaClient, cfg.KafkaCfg.ConsumerGroupID, messageHandler, cfg.KafkaCfg.Topic)
+	if err != nil {
+		log.Fatal("Failed to create consumer:", err)
+	}
 
 	return &App{
-		ConvertHandler: c,
-		cfg:            cfg,
-		UnzipHandler:   h,
+		consumer:    consumer,
+		config:      cfg,
+		handler:     messageHandler,
+		kafkaClient: kafkaClient,
 	}
 }
 
-// kafka
-func (a *App) Start() {
-	//root := a.kafka.Get()
-	//обработка сообщения
-	//root := a.cfg.ConverterCfg.RootDir
-	//log.Println("root:", root)
-	//a.handler.HandleDirPipline(root, a.cfg.ConverterCfg.TmpDir)
-	root := `B:\shadowarchive.zip`
-	log.Println("start")
-	result, err := a.UnzipHandler.Unzip(root)
-	if err != nil {
-		log.Println(err)
-		return
-	}
+func (a *App) Start(ctx context.Context) error {
+	log.Println("Starting converter application...")
+	log.Printf("Config: BrokersAddr=%s, ConsumerGroupID=%s, Topic=%s",
+		a.config.KafkaCfg.BrokersAddr,
+		a.config.KafkaCfg.ConsumerGroupID,
+		a.config.KafkaCfg.Topic,
+	)
 
-	log.Println(result)
+	go func() {
+		if err := a.consumer.Consume(ctx); err != nil {
+			log.Printf("Consumer error: %v", err)
+		}
+	}()
+
+	log.Println("Converter is running. Press Ctrl+C to exit.")
+	return nil
 }
 
-func (a *App) Pipline() {
-	//unzip  return filepath string
-
-	//convert   return filepath string for PDFs files  or S3 link
+func (a *App) Stop() error {
+	log.Println("Stopping converter application...")
+	if a.consumer != nil {
+		if err := a.consumer.Close(); err != nil {
+			log.Printf("Error closing consumer: %v", err)
+		}
+	}
+	if a.kafkaClient != nil {
+		if err := a.kafkaClient.Close(); err != nil {
+			log.Printf("Error closing Kafka client: %v", err)
+		}
+	}
+	return nil
 }

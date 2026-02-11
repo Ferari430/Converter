@@ -56,7 +56,7 @@ func (c *ConvertHandler) ProcessFiles(files map[string]string, tmpdir string) ([
 func (c *ConvertHandler) ConvertFiles(tmpFiles []string, tmpdir string) error {
 	failedFiles := make([]string, 0, len(tmpFiles))
 	var processedFiles int64
-	source := filepath.Dir(tmpFiles[0]) //????
+	source := filepath.Dir(tmpFiles[0])
 	ok := false
 	for _, file := range tmpFiles {
 		log.Println("file:", file)
@@ -103,13 +103,17 @@ func changeExtensionToHTML(filepathStr string) string {
 	base = strings.TrimSuffix(base, "_TEMP")
 	return base + ".html"
 }
+	ext := filepath.Ext(filepathStr)
+	base := strings.TrimSuffix(filepathStr, ext)
+	base = strings.TrimSuffix(base, "_TEMP")
+	return base + ".html"
+}
 
 func (c *ConvertHandler) HandleDirPipline(root, tmpdir string) {
 
 	log.Println("tmpdir:", tmpdir)
 	c.FindImages(root)
 
-	//ищем мд файлы в папке которая пришла
 	files, err := c.ScanMdFiles(root)
 
 	if err != nil {

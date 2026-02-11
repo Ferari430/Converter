@@ -43,11 +43,10 @@ func (g *GoImageProcessor) RecursiveFindImage(root string) error {
 	return err
 }
 
-// todo: обработать пустую мапу или че то типо того
 func (g *GoImageProcessor) GetInfo() map[string]string {
 	if len(g.images) == 0 {
 		return nil
 	}
-	
+
 	return g.images
 }

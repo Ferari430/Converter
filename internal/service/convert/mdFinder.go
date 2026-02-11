@@ -12,15 +12,11 @@ import (
 	"strings"
 )
 
-type imageFinder interface {
-	GetInfo() map[string]string
-}
-
 type MDFinder struct {
 	root        string
 	dataType    string
 	Data        map[string]string
-	ImageFinder imageFinder
+	ImageFinder ImageFinder
 }
 
 type Config struct {
@@ -28,7 +24,7 @@ type Config struct {
 	outputPath string
 }
 
-func NewMDFinder(root string, t string, imageFinder imageFinder) *MDFinder {
+func NewMDFinder(root string, t string, imageFinder ImageFinder) *MDFinder {
 	return &MDFinder{
 		root:        root,
 		dataType:    t,
@@ -57,8 +53,6 @@ func (f *MDFinder) ScanFiles(root string) (map[string]string, error) {
 				f.Data[filename] = path
 				a++
 			}
-		} else {
-
 		}
 
 		return nil
@@ -112,10 +106,8 @@ func (f *MDFinder) ProcessFile(inputPath, tmpdir string) (string, error) {
 }
 
 var (
-	// Основное регулярное выражение - ловим ВСЁ внутри скобок
 	imageRegex = regexp.MustCompile(`!\[(\[)?([^\]]+?)(\])?\]`)
 
-	// Дополнительное: для извлечения чистого имени файла (без пути в скобках)
 	fullLinkRegex = regexp.MustCompile(`!\[(\[)?([^\]]+?)(\])?\]\(([^)]+)\)`)
 )
 
@@ -127,29 +119,24 @@ func processLine(line string, imagePath map[string]string, output string) string
 }
 
 func handleLineWithImage(l string, imagePath map[string]string, output string) string {
-	// Сначала обрабатываем ссылки с путями в скобках
 	result := fullLinkRegex.ReplaceAllStringFunc(l, func(match string) string {
 		parts := fullLinkRegex.FindStringSubmatch(match)
 		if len(parts) < 5 {
 			return match
 		}
 
-		filename := cleanFilename(parts[2]) // Очищаем имя файла
+		filename := cleanFilename(parts[2])
 		currentPath := strings.TrimSpace(parts[4])
 		isDoubleBracket := parts[1] == "[" && parts[3] == "]"
 
-		// Если путь уже есть - возможно, его не нужно менять
 		if isGoodPath(currentPath) {
 			return match
 		}
 
-		// Ищем файл в мапе
 		return processImageLink(filename, currentPath, isDoubleBracket, imagePath, output)
 	})
 
-	// Затем обрабатываем простые ![[filename]]
 	result = imageRegex.ReplaceAllStringFunc(result, func(match string) string {
-		// Пропускаем, если это уже обработано как полная ссылка
 		if strings.Contains(match, "](") {
 			return match
 		}
@@ -171,27 +158,23 @@ func handleLineWithImage(l string, imagePath map[string]string, output string) s
 
 // Очистка имени файла от лишних символов
 func cleanFilename(raw string) string {
-	// Убираем пробелы по краям
 	filename := strings.TrimSpace(raw)
 
-	// Убираем markdown-экранирование (если есть)
-	filename = strings.ReplaceAll(filename, `\ `, " ") // \_ -> _
-	filename = strings.ReplaceAll(filename, `\[`, "[") // \[ -> [
-	filename = strings.ReplaceAll(filename, `\]`, "]") // \] -> ]
-	filename = strings.ReplaceAll(filename, `\(`, "(") // \( -> (
-	filename = strings.ReplaceAll(filename, `\)`, ")") // \) -> )
+	filename = strings.ReplaceAll(filename, `\ `, " ")
+	filename = strings.ReplaceAll(filename, `\[`, "[")
+	filename = strings.ReplaceAll(filename, `\]`, "]")
+	filename = strings.ReplaceAll(filename, `\(`, "(")
+	filename = strings.ReplaceAll(filename, `\)`, ")")
 
 	return filename
 }
 
 // Поиск файла с учетом пробелов и разных вариантов
 func findImageInMap(filename string, imagePath map[string]string) (string, bool) {
-	// Вариант 1: Точное совпадение
 	if path, ok := imagePath[filename]; ok {
 		return path, true
 	}
 
-	// Вариант 2: Без учета регистра
 	lowerFilename := strings.ToLower(filename)
 	for key, path := range imagePath {
 		if strings.ToLower(key) == lowerFilename {
@@ -199,7 +182,6 @@ func findImageInMap(filename string, imagePath map[string]string) (string, bool)
 		}
 	}
 
-	// Вариант 3: Частичное совпадение (для файлов с путями)
 	baseName := filepath.Base(filename)
 	for key, path := range imagePath {
 		if strings.ToLower(filepath.Base(key)) == strings.ToLower(baseName) {
@@ -282,7 +264,6 @@ func (f *MDFinder) ConvertMDToPDF(inputFile, outputFile, resourceBaseDir string)
 
 	PandocPath := `pandoc`
 
-	// Преобразуем пути к абсолютным
 	absInput, err := filepath.Abs(inputFile)
 	if err != nil {
 		return fmt.Errorf("failed to get absolute path: %v", err)
@@ -299,30 +280,22 @@ func (f *MDFinder) ConvertMDToPDF(inputFile, outputFile, resourceBaseDir string)
 		resourceDir = inputDir
 	}
 
-	// Логируем для отладки
 	log.Printf("Converting: %s -> %s", absInput, absOutput)
 	log.Printf("Working dir: %s", inputDir)
 	log.Printf("Resource dir: %s", resourceDir)
 
-	// Формируем команду с новым синтаксисом
 	cmd := exec.Command(PandocPath,
 		absInput,
 		"-o", absOutput,
-		// Новый синтаксис вместо --self-contained
 		"--embed-resources",
 		"--standalone",
-		// Настройки для игнорирования YAML
-		//"--from=markdown",
 		"--from=markdown-yaml_metadata_block",
-		// Пути для поиска ресурсов
 		"--resource-path="+resourceDir,
 		"--verbose",
 	)
 
-	// Устанавливаем рабочую директорию
 	cmd.Dir = inputDir
 
-	// Запускаем команду
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("pandoc error: %v\nOutput: %s", err, string(output))
