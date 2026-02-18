@@ -11,7 +11,6 @@ import (
 
 func main() {
 	application := app.NewApp()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

@@ -7,9 +7,9 @@ import (
 	"converter/internal/config"
 	infra_kafka "converter/internal/infra/kafka"
 	"converter/internal/infra/repository"
-	convertservice "converter/internal/service/convert"
-	"converter/internal/service/unzip"
 	"converter/internal/usecase"
+	convertuc "converter/internal/usecase/convert"
+	unzipuc "converter/internal/usecase/unzip"
 	"log"
 )
 
@@ -31,9 +31,10 @@ func NewApp() *App {
 		log.Fatal("Failed to create Kafka client:", err)
 	}
 
-	unzipService := unzip.NewUnzipService()
-	imageProcessor := convertservice.NewGoImageProcessor()
-	mdFinder := convertservice.NewMDFinder(cfg.ConverterCfg.RootDir, ".md", imageProcessor)
+	// Инициализируем usecase сервисы
+	unzipService := unzipuc.NewUnzipService()
+	imageProcessor := convertuc.NewGoImageProcessor()
+	mdFinder := convertuc.NewMarkdownFinder(cfg.ConverterCfg.RootDir, ".md", imageProcessor)
 
 	unzipRepo := repository.NewUnzipRepository(unzipService)
 	convertRepo := repository.NewConvertRepository(mdFinder, imageProcessor, &cfg.ConverterCfg)

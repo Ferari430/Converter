@@ -16,13 +16,6 @@ func NewUnzipService() *UnzipService {
 	return &UnzipService{}
 }
 
-func (u *UnzipService) ExtractFiles(root string) (string, error) {
-	f := ""
-	_ = root
-
-	return f, nil
-}
-
 func (u *UnzipService) UnzipArchive(src string) (*entity.UnzipResult, error) {
 	if _, err := os.Stat(src); os.IsNotExist(err) {
 		return nil, fmt.Errorf("file does not exist: %s", src)

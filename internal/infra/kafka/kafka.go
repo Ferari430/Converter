@@ -10,18 +10,22 @@ import (
 	"github.com/IBM/sarama"
 )
 
+// KafkaClient - обертка над sarama.Client
 type KafkaClient struct {
 	client sarama.Client
 	config config.KafkaConfig
 }
 
+// NewClient - создает новый Kafka клиент
 func NewClient(kafkaCfg config.KafkaConfig) (*KafkaClient, error) {
 	log.Printf("Connecting to Kafka at: %s", kafkaCfg.BrokersAddr)
 
+	// Проверяем что адрес не пустой
 	if kafkaCfg.BrokersAddr == "" {
 		return nil, fmt.Errorf("Kafka broker address is empty")
 	}
 
+	// Проверяем формат адреса
 	if !strings.Contains(kafkaCfg.BrokersAddr, ":") {
 		return nil, fmt.Errorf("invalid Kafka address format: %s, expected host:port", kafkaCfg.BrokersAddr)
 	}
@@ -48,6 +52,7 @@ func NewClient(kafkaCfg config.KafkaConfig) (*KafkaClient, error) {
 
 	log.Println("Successfully connected to Kafka")
 
+	// Проверяем доступность брокеров
 	brokers := client.Brokers()
 	log.Printf("Available brokers: %d", len(brokers))
 	for _, broker := range brokers {
@@ -70,18 +75,22 @@ func NewClient(kafkaCfg config.KafkaConfig) (*KafkaClient, error) {
 	}, nil
 }
 
+// Producer - возвращает SyncProducer
 func (kc *KafkaClient) Producer() (sarama.SyncProducer, error) {
 	return sarama.NewSyncProducerFromClient(kc.client)
 }
 
+// ConsumerGroup - возвращает ConsumerGroup
 func (kc *KafkaClient) ConsumerGroup() (sarama.ConsumerGroup, error) {
 	return sarama.NewConsumerGroupFromClient(kc.config.ConsumerGroupID, kc.client)
 }
 
+// Close - закрывает клиент
 func (kc *KafkaClient) Close() error {
 	return kc.client.Close()
 }
 
+// NewConsumer - создает новый Consumer используя KafkaClient
 func NewConsumer(
 	client *KafkaClient,
 	groupID string,

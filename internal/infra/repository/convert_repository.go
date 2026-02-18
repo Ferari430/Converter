@@ -4,22 +4,22 @@ import (
 	"converter/internal/config"
 	"converter/internal/domain/entity"
 	"converter/internal/domain/repository"
-	convertservice "converter/internal/service/convert"
+	"converter/internal/usecase/convert"
 	"log"
 	"path/filepath"
 )
 
 // ConvertRepositoryImpl - реализация ConvertRepository
 type ConvertRepositoryImpl struct {
-	mdFinder     convertservice.MdFinder
-	imageFinder  convertservice.ImageFinder
+	mdFinder     convert.MDFinder
+	imageFinder  convert.ImageFinder
 	tmpDir       string
 	converterCfg *config.ConverterConfig
 }
 
 func NewConvertRepository(
-	mdFinder convertservice.MdFinder,
-	imageFinder convertservice.ImageFinder,
+	mdFinder convert.MDFinder,
+	imageFinder convert.ImageFinder,
 	cfg *config.ConverterConfig,
 ) repository.ConvertRepository {
 	return &ConvertRepositoryImpl{

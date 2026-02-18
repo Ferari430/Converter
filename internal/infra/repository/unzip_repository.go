@@ -3,7 +3,7 @@ package repository
 import (
 	"converter/internal/domain/entity"
 	"converter/internal/domain/repository"
-	"converter/internal/service/unzip"
+	"converter/internal/usecase/unzip"
 )
 
 // UnzipRepositoryImpl - реализация UnzipRepository
