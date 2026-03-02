@@ -1,6 +1,7 @@
 package convertservice
 
 import (
+	"converter/internal/repo"
 	"io/fs"
 	"log"
 	"path/filepath"
@@ -8,16 +9,28 @@ import (
 )
 
 type GoImageProcessor struct {
-	images map[string]string // map{pngName:pngPath}
+	db *repo.InMemoryDatabase
 }
 
 func NewGoImageProcessor() *GoImageProcessor {
-	m := make(map[string]string)
-	return &GoImageProcessor{images: m}
+	return &GoImageProcessor{
+		db: nil, // Будет установлена через SetDB или передана при создании
+	}
+}
+
+func NewGoImageProcessorWithDB(db *repo.InMemoryDatabase) *GoImageProcessor {
+	return &GoImageProcessor{
+		db: db,
+	}
 }
 
 func (g *GoImageProcessor) RecursiveFindImage(root string) error {
-	extensions := []string{".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp"}
+	if g.db == nil {
+		log.Println("[GoImageProcessor] ERROR: Database not initialized")
+		return nil
+	}
+
+	extensions := []string{".png", ".jpg", ".jpeg"}
 	log.Println("searching for images recursively in ", root)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -32,10 +45,7 @@ func (g *GoImageProcessor) RecursiveFindImage(root string) error {
 		for _, imageExt := range extensions {
 			if ext == imageExt {
 				filename := filepath.Base(path)
-
-				if _, exists := g.images[filename]; !exists {
-					g.images[filename] = path
-				}
+				g.db.AddImage(filename, path)
 			}
 		}
 		return nil
@@ -45,9 +55,8 @@ func (g *GoImageProcessor) RecursiveFindImage(root string) error {
 
 // todo: обработать пустую мапу или че то типо того
 func (g *GoImageProcessor) GetInfo() map[string]string {
-	if len(g.images) == 0 {
+	if g.db == nil {
 		return nil
 	}
-	
-	return g.images
+	return g.db.GetImages()
 }

@@ -22,13 +22,6 @@ func NewUnzipService() *UnzipService {
 	return &UnzipService{}
 }
 
-func (u *UnzipService) ExtractFiles(root string) (string, error) {
-	f := ""
-	_ = root
-
-	return f, nil
-}
-
 func (u *UnzipService) UnzipArchive(src string) (*models.UnzipResult, error) {
 	// Проверяем существование файла
 	if _, err := os.Stat(src); os.IsNotExist(err) {

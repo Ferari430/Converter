@@ -1,9 +1,15 @@
 package app
 
 import (
+	"context"
+	"converter/internal/adapters/in"
+	"converter/internal/adapters/out"
 	"converter/internal/config"
 	"converter/internal/handler/convert"
+	"converter/internal/handler/pipeline"
 	"converter/internal/handler/unzip"
+	kafka2 "converter/internal/infra/kafka"
+	"converter/internal/repo"
 	convertservice "converter/internal/service/convert"
 	unzip2 "converter/internal/service/unzip"
 	"log"
@@ -13,11 +19,8 @@ type App struct {
 	ConvertHandler *convert.ConvertHandler
 	UnzipHandler   *unzip.UnzipHandler
 	cfg            *config.Config
-	kafka          Kafka
-}
-
-type Kafka interface {
-	Get() string
+	consumer       in.Consumer
+	db             *repo.InMemoryDatabase
 }
 
 func NewApp() *App {
@@ -27,8 +30,12 @@ func NewApp() *App {
 		log.Fatal(err)
 	}
 
-	im := convertservice.NewGoImageProcessor()
-	md := convertservice.NewMDFinder(cfg.ConverterCfg.RootDir, ".md", im)
+	// Создаём централизованную БД
+	db := repo.NewInMemoryDatabase()
+
+	// Создаём сервисы с передачей БД
+	im := convertservice.NewGoImageProcessorWithDB(db)
+	md := convertservice.NewMDFinderWithDBAndWkhtmltopdf(cfg.ConverterCfg.RootDir, ".md", im, db, cfg.AppCfg.WkhtmltopdfPdf)
 	c := convert.NewConvertHandler(md, im)
 
 	///UNZIP
@@ -36,33 +43,40 @@ func NewApp() *App {
 	s := unzip2.NewUnzipService()
 	h := unzip.NewUnzipHandler(s)
 
+	kafka, err := kafka2.NewClient(cfg.KafkaCfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	prod, err := out.NewProducer(kafka, cfg.KafkaCfg.Topic)
+	_ = prod
+
+	// Создаём архивный pipeline обработки
+	processingPipeline := pipeline.NewArchiveProcessingPipeline(h, c, cfg.ConverterCfg.TmpDir)
+
+	// Создаём обработчик Kafka событий
+	kafkaEventHandler := in.NewKafkaEventHandler(processingPipeline)
+	kafkaHandler := in.NewHandler(kafkaEventHandler)
+	cons, err := in.NewConsumer(kafka, cfg.KafkaCfg.ConsumerGroupID, kafkaHandler)
+
 	return &App{
 		ConvertHandler: c,
 		cfg:            cfg,
 		UnzipHandler:   h,
+		consumer:       cons,
+		db:             db,
 	}
 }
 
 // kafka
 func (a *App) Start() {
-	//root := a.kafka.Get()
-	//обработка сообщения
-	//root := a.cfg.ConverterCfg.RootDir
-	//log.Println("root:", root)
-	//a.handler.HandleDirPipline(root, a.cfg.ConverterCfg.TmpDir)
-	root := `B:\shadowarchive.zip`
-	log.Println("start")
-	result, err := a.UnzipHandler.Unzip(root)
-	if err != nil {
-		log.Println(err)
-		return
-	}
+	go func() {
+		err := a.consumer.Consume(context.Background())
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
-	log.Println(result)
-}
-
-func (a *App) Pipline() {
-	//unzip  return filepath string
-
-	//convert   return filepath string for PDFs files  or S3 link
+	log.Println("starting consumer")
+	select {} // Ждём вечно, консьюмер обработает сообщения
 }

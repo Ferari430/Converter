@@ -2,6 +2,7 @@ package convertservice
 
 import (
 	"bufio"
+	"converter/internal/repo"
 	"fmt"
 	"io/fs"
 	"log"
@@ -17,10 +18,11 @@ type imageFinder interface {
 }
 
 type MDFinder struct {
-	root        string
-	dataType    string
-	Data        map[string]string
-	ImageFinder imageFinder
+	root           string
+	dataType       string
+	db             *repo.InMemoryDatabase
+	ImageFinder    imageFinder
+	wkhtmltopdfCmd string
 }
 
 type Config struct {
@@ -32,12 +34,39 @@ func NewMDFinder(root string, t string, imageFinder imageFinder) *MDFinder {
 	return &MDFinder{
 		root:        root,
 		dataType:    t,
-		Data:        make(map[string]string),
+		db:          nil, // Будет установлена через SetDB
 		ImageFinder: imageFinder,
 	}
 }
 
+func NewMDFinderWithDB(root string, t string, imageFinder imageFinder, db *repo.InMemoryDatabase) *MDFinder {
+	return &MDFinder{
+		root:           root,
+		dataType:       t,
+		db:             db,
+		ImageFinder:    imageFinder,
+		wkhtmltopdfCmd: "wkhtmltopdf",
+	}
+}
+
+func NewMDFinderWithDBAndWkhtmltopdf(root string, t string, imageFinder imageFinder, db *repo.InMemoryDatabase, wkhtmltopdfPath string) *MDFinder {
+	return &MDFinder{
+		root:           root,
+		dataType:       t,
+		db:             db,
+		ImageFinder:    imageFinder,
+		wkhtmltopdfCmd: wkhtmltopdfPath,
+	}
+}
+
 func (f *MDFinder) ScanFiles(root string) (map[string]string, error) {
+	if f.db == nil {
+		log.Println("[MDFinder] ERROR: Database not initialized")
+		return make(map[string]string), nil
+	}
+
+	// Очищаем предыдущие результаты для этого сканирования
+	f.db.ClearMDFiles()
 
 	a := 0
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -53,18 +82,14 @@ func (f *MDFinder) ScanFiles(root string) (map[string]string, error) {
 		if ext == f.dataType && !strings.Contains(path, "excalidraw") && !strings.Contains(path, ".convas") {
 			filename := filepath.Base(path)
 			log.Println(path, ext)
-			if _, exists := f.Data[filename]; !exists {
-				f.Data[filename] = path
-				a++
-			}
-		} else {
-
+			f.db.AddMDFile(filename, path)
+			a++
 		}
 
 		return nil
 	})
 	log.Println(a)
-	return f.Data, err
+	return f.db.GetMDFiles(), err
 }
 
 func (f *MDFinder) ProcessFile(inputPath, tmpdir string) (string, error) {
@@ -202,7 +227,7 @@ func findImageInMap(filename string, imagePath map[string]string) (string, bool)
 	// Вариант 3: Частичное совпадение (для файлов с путями)
 	baseName := filepath.Base(filename)
 	for key, path := range imagePath {
-		if strings.ToLower(filepath.Base(key)) == strings.ToLower(baseName) {
+		if strings.EqualFold(filepath.Base(key), baseName) {
 			return path, true
 		}
 	}
@@ -329,5 +354,40 @@ func (f *MDFinder) ConvertMDToPDF(inputFile, outputFile, resourceBaseDir string)
 	}
 
 	log.Printf("Successfully converted %s to %s", absInput, absOutput)
+	return nil
+}
+
+// ConvertHTMLToPDF - конвертирует HTML в PDF используя wkhtmltopdf
+func (f *MDFinder) ConvertHTMLToPDF(htmlFile, pdfFile string) error {
+	if _, err := os.Stat(htmlFile); err != nil {
+		return fmt.Errorf("HTML file not found: %s", htmlFile)
+	}
+
+	// Преобразуем пути к абсолютным
+	absInput, err := filepath.Abs(htmlFile)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path for HTML: %v", err)
+	}
+
+	absOutput, err := filepath.Abs(pdfFile)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path for PDF: %v", err)
+	}
+
+	log.Printf("Converting HTML to PDF: %s -> %s", absInput, absOutput)
+
+	// Формируем команду wkhtmltopdf
+	cmd := exec.Command(f.wkhtmltopdfCmd,
+		absInput,
+		absOutput,
+	)
+
+	// Запускаем команду
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("wkhtmltopdf error: %v\nOutput: %s", err, string(output))
+	}
+
+	log.Printf("Successfully converted HTML to PDF: %s", absOutput)
 	return nil
 }

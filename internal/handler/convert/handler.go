@@ -2,6 +2,7 @@ package convert
 
 import (
 	"converter/internal/config"
+	"errors"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -12,6 +13,7 @@ type MdFinder interface {
 	ScanFiles(root string) (map[string]string, error)
 	ProcessFile(inputPath, tmpdir string) (string, error)
 	ConvertMDToPDF(inputFile, outputFile, resourceBaseDir string) error
+	ConvertHTMLToPDF(htmlFile, pdfFile string) error
 }
 
 type ImageFinder interface {
@@ -64,10 +66,18 @@ func (c *ConvertHandler) ConvertFiles(tmpFiles []string, tmpdir string) error {
 		log.Println(file, tmpdir)
 		err := c.md.ConvertMDToPDF(file, htmlName, source)
 		if err != nil {
-
 			failedFiles = append(failedFiles, file)
 			continue
 		}
+
+		// Конвертируем HTML в PDF
+		pdfName := changeExtensionToPDF(htmlName)
+		err = c.md.ConvertHTMLToPDF(htmlName, pdfName)
+		if err != nil {
+			log.Printf("Warning: Failed to convert HTML to PDF: %v", err)
+			// Продолжаем даже если PDF конвертация не удалась, так как HTML уже создан
+		}
+
 		processedFiles++
 	}
 
@@ -77,12 +87,10 @@ func (c *ConvertHandler) ConvertFiles(tmpFiles []string, tmpdir string) error {
 		if ok {
 			log.Println("SUCCESS")
 			fmt.Printf("Failed to convert files: %v\nConverted files: %v\nFilesCount:%v\n", len(failedFiles), processedFiles, len(tmpFiles))
-			return
+		} else {
+			log.Println("FAIL")
+			fmt.Printf("Failed to convert files: %v\nConverted files: %v\nFilesCount:%v\n", len(failedFiles), processedFiles, len(tmpFiles))
 		}
-
-		log.Println("FAIL")
-		fmt.Printf("Failed to convert files: %v\nConverted files: %v\nFilesCount:%v\n", len(failedFiles), processedFiles, len(tmpFiles))
-		return
 	}()
 
 	return nil
@@ -104,7 +112,13 @@ func changeExtensionToHTML(filepathStr string) string {
 	return base + ".html"
 }
 
-func (c *ConvertHandler) HandleDirPipline(root, tmpdir string) {
+func changeExtensionToPDF(htmlPath string) string {
+	ext := filepath.Ext(htmlPath)
+	base := strings.TrimSuffix(htmlPath, ext)
+	return base + ".pdf"
+}
+
+func (c *ConvertHandler) HandleDirPipline(root, tmpdir string) error {
 
 	log.Println("tmpdir:", tmpdir)
 	c.FindImages(root)
@@ -119,12 +133,14 @@ func (c *ConvertHandler) HandleDirPipline(root, tmpdir string) {
 	tmpfiles, err := c.ProcessFiles(files, tmpdir)
 	if err != nil {
 		log.Println(err)
-		return
+		return err
 	}
 
 	err = c.ConvertFiles(tmpfiles, tmpdir)
 
 	if err != nil {
-		log.Fatal(err)
+		return errors.New("cant convert files")
 	}
+
+	return nil
 }
