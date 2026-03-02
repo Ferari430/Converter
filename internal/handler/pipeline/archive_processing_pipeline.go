@@ -25,13 +25,9 @@ func NewArchiveProcessingPipeline(
 	}
 }
 
-// Process запускает полный pipeline обработки архива
-// Стадия 1: Распаковывает архив
-// Стадия 2: Обрабатывает распакованные файлы
 func (app *ArchiveProcessingPipeline) Process(archivePath string) error {
 	log.Println("[Pipeline] Starting archive processing for:", archivePath)
 
-	// Стадия 1: Распаковка архива
 	log.Println("[Pipeline] Stage 1: Unzipping archive...")
 	unzippedDir, err := app.unzipHandler.Unzip(archivePath)
 	if err != nil {
@@ -41,7 +37,6 @@ func (app *ArchiveProcessingPipeline) Process(archivePath string) error {
 
 	log.Println("[Pipeline] Archive unzipped to:", unzippedDir)
 
-	// Стадия 2: Обработка распакованных файлов
 	log.Println("[Pipeline] Stage 2: Processing files...")
 	app.convertHandler.HandleDirPipline(unzippedDir, app.tmpDir)
 	log.Println("[Pipeline] Archive processing completed")
