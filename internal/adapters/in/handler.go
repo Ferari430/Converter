@@ -22,7 +22,7 @@ func (h Handler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
 
 func (h Handler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		// Конвертируем sarama сообщение в доменный KafkaMessage
+
 		kafkaMsg := &event.KafkaMessage{
 			Topic:     msg.Topic,
 			Partition: msg.Partition,

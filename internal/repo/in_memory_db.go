@@ -15,7 +15,6 @@ func NewInMemoryDatabase() *InMemoryDatabase {
 	}
 }
 
-// Image methods
 func (db *InMemoryDatabase) AddImage(filename, path string) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -25,7 +24,6 @@ func (db *InMemoryDatabase) AddImage(filename, path string) {
 func (db *InMemoryDatabase) GetImages() map[string]string {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
-	// Return a copy to prevent external modifications
 	result := make(map[string]string)
 	for k, v := range db.images {
 		result[k] = v
@@ -63,7 +61,6 @@ func (db *InMemoryDatabase) ClearMDFiles() {
 	db.mdFiles = make(map[string]string)
 }
 
-// Clear all data
 func (db *InMemoryDatabase) Clear() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
