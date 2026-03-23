@@ -1,8 +1,10 @@
 package config
 
 import (
+	"flag"
 	"os"
 	"runtime"
+	"strconv"
 
 	"log"
 
@@ -50,11 +52,27 @@ func NewConfig() (*Config, error) {
 		wkhtmltopdf string
 		r           string
 		tmp         string
+		vps         bool
+		envPath     string
 	)
 
-	System := runtime.GOOS
+	flag.BoolVar(&vps, "vps", true, "is this running on vps?")
+	flag.Parse()
+	value, ok := os.LookupEnv("vps")
+	if ok {
+		boolVal, _ := strconv.ParseBool(value)
+		vps = boolVal
+	}
 
-	err := godotenv.Load(`/home/user/programmin/obsidian_Project/prog/converter/.env`)
+	System := runtime.GOOS
+	if vps {
+		envPath = "root/server/Converter/.env"
+		log.Println("vps path for env file:", envPath)
+	} else {
+		envPath = `/home/user/programmin/obsidian_Project/prog/converter/.env`
+	}
+
+	err := godotenv.Load(envPath)
 	if err != nil {
 		log.Println("Error loading .env file")
 		return nil, err
